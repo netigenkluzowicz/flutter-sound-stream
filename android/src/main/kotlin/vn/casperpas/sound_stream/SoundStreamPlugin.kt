@@ -32,6 +32,7 @@ enum class SoundStreamErrors {
     FailedToStop,
     FailedToWriteBuffer,
     Unknown,
+    FailedToSetStereoVolume
 }
 
 enum class SoundStreamStatus {
@@ -74,6 +75,9 @@ public class SoundStreamPlugin : FlutterPlugin,
             .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
             .setSampleRate(mPlayerSampleRate)
             .build()
+    private var mPlayerSessionId = AudioManager.AUDIO_SESSION_ID_GENERATE
+    private var mPlayerLeftGain = 1.0
+    private var mPlayerRightGain = 1.0
 
     /** ======== Basic Plugin initialization ======== **/
 
@@ -111,6 +115,7 @@ public class SoundStreamPlugin : FlutterPlugin,
                 "startPlayer" -> startPlayer(result)
                 "stopPlayer" -> stopPlayer(result)
                 "writeChunk" -> writeChunk(call, result)
+                "setStereoVolume" -> setStereoVolume(call, result)
                 else -> result.notImplemented()
             }
         } catch (e: Exception) {
@@ -308,6 +313,10 @@ public class SoundStreamPlugin : FlutterPlugin,
 
         mPlayerBufferSize = AudioTrack.getMinBufferSize(mPlayerSampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
 
+        mPlayerSessionId = call.argument<Int>("sessionId") ?: mPlayerSessionId
+
+        debugLog("sessionId: "+mPlayerSessionId)
+
         if (mAudioTrack?.state == AudioTrack.STATE_INITIALIZED) {
             mAudioTrack?.release()
         }
@@ -316,8 +325,9 @@ public class SoundStreamPlugin : FlutterPlugin,
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                 .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
+                .setLegacyStreamType(AudioManager.STREAM_MUSIC) //this prabably overrides "setContentType" and "setUsage"
                 .build()
-        mAudioTrack = AudioTrack(audioAttributes, mPlayerFormat, mPlayerBufferSize, AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE)
+        mAudioTrack = AudioTrack(audioAttributes, mPlayerFormat, mPlayerBufferSize, AudioTrack.MODE_STREAM, mPlayerSessionId)
         result.success(true)
         sendPlayerStatus(SoundStreamStatus.Initialized)
     }
@@ -392,6 +402,18 @@ public class SoundStreamPlugin : FlutterPlugin,
 
                 sendEventMethod("dataPeriod", byteBuffer.array())
             }
+        }
+    }
+
+    private fun setStereoVolume(@NonNull call: MethodCall, @NonNull result: Result) {
+        mPlayerLeftGain = call.argument<Double>("leftGain") ?: mPlayerLeftGain
+        mPlayerRightGain = call.argument<Double>("rightGain") ?: mPlayerRightGain
+        debugLog("starting setStereoVolume, leftGain: " + mPlayerLeftGain + ", rightGain: " + mPlayerRightGain)
+        try {
+            mAudioTrack?.setStereoVolume(mPlayerLeftGain.toFloat(), mPlayerRightGain.toFloat())
+            result.success(true)
+        } catch (e: Exception) {
+            result.error(SoundStreamErrors.FailedToSetStereoVolume.name, "Failed to set stereo volume", e.localizedMessage)
         }
     }
 }

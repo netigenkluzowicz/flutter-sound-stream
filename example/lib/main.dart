@@ -66,10 +66,12 @@ class _MyAppState extends State<MyApp> {
     await Future.wait([
       _recorder.initialize(),
       _player.initialize(),
+      //_player.initialize(showLogs: true),
     ]);
   }
 
   void _play() async {
+    //await _player.setStereoVolume(leftGain: 1.0, rightGain: 0.0);
     await _player.start();
 
     if (_micChunks.isNotEmpty) {
