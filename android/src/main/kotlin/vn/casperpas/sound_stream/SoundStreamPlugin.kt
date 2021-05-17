@@ -329,6 +329,7 @@ public class SoundStreamPlugin : FlutterPlugin,
                 .build()
         mAudioTrack = AudioTrack(audioAttributes, mPlayerFormat, mPlayerBufferSize, AudioTrack.MODE_STREAM, mPlayerSessionId)
         result.success(true)
+        debugLog("mAudioTrack audioSessionId: "+ mAudioTrack!!.audioSessionId)
         sendPlayerStatus(SoundStreamStatus.Initialized)
     }
 
