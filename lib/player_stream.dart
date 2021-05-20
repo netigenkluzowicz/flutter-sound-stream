@@ -1,14 +1,23 @@
 part of sound_stream;
 
 class PlayerStream {
-  static final PlayerStream _instance = PlayerStream._internal();
-  factory PlayerStream() => _instance;
+  //static final PlayerStream _instance = PlayerStream._internal();
+  //factory PlayerStream() => _instance;
 
   final _playerStatusController =
       StreamController<SoundStreamStatus>.broadcast();
   final _audioStreamController = StreamController<Uint8List>();
 
-  PlayerStream._internal() {
+  //PlayerStream._internal() {
+  //  SoundStream();
+  //  _eventsStreamController.stream.listen(_eventListener);
+  //  _playerStatusController.add(SoundStreamStatus.Unset);
+  //  _audioStreamController.stream.listen((data) {
+  //    writeChunk(data);
+  //  });
+  //}
+
+  PlayerStream() {
     SoundStream();
     _eventsStreamController.stream.listen(_eventListener);
     _playerStatusController.add(SoundStreamStatus.Unset);

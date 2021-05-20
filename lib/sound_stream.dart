@@ -21,9 +21,9 @@ enum SoundStreamStatus {
 }
 
 class SoundStream {
-  static final SoundStream _instance = SoundStream._internal();
-  factory SoundStream() => _instance;
-  SoundStream._internal() {
+  //static final SoundStream _instance = SoundStream._internal();
+  //factory SoundStream() => _instance;
+  SoundStream() {
     _methodChannel.setMethodCallHandler(_onMethodCall);
   }
 
