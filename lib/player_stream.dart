@@ -18,10 +18,15 @@ class PlayerStream {
   }
 
   /// Initialize Player with specified [sampleRate]
-  Future<dynamic> initialize({int sampleRate = 16000, bool showLogs = false}) =>
+  Future<dynamic> initialize({
+    int sampleRate = 16000,
+    bool showLogs = false,
+    int? sessionId,
+  }) =>
       _methodChannel.invokeMethod("initializePlayer", {
         "sampleRate": sampleRate,
         "showLogs": showLogs,
+        "sessionId": sessionId,
       });
 
   /// Player will start receiving audio chunks (PCM 16bit data)
@@ -35,6 +40,16 @@ class PlayerStream {
   /// to play audio. Chunks will be queued/scheduled to play sequentially
   Future<dynamic> writeChunk(Uint8List data) => _methodChannel
       .invokeMethod("writeChunk", <String, dynamic>{"data": data});
+
+  /// setStereoVolume
+  Future<dynamic> setStereoVolume({
+    double leftGain = 1.0,
+    double rightGain = 1.0,
+  }) =>
+      _methodChannel.invokeMethod("setStereoVolume", {
+        "leftGain": leftGain,
+        "rightGain": rightGain,
+      });
 
   /// Current status of the [PlayerStream]
   Stream<SoundStreamStatus> get status => _playerStatusController.stream;

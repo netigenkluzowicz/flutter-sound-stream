@@ -32,6 +32,7 @@ enum class SoundStreamErrors {
     FailedToStop,
     FailedToWriteBuffer,
     Unknown,
+    FailedToSetStereoVolume
 }
 
 enum class SoundStreamStatus {
@@ -76,6 +77,9 @@ public class SoundStreamPlugin : FlutterPlugin,
             .build()
 
     private var mPlayerSessionId = AudioManager.AUDIO_SESSION_ID_GENERATE
+    private var mPlayerLeftGain = 1.0
+    private var mPlayerRightGain = 1.0
+
     /** ======== Basic Plugin initialization ======== **/
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -112,6 +116,7 @@ public class SoundStreamPlugin : FlutterPlugin,
                 "startPlayer" -> startPlayer(result)
                 "stopPlayer" -> stopPlayer(result)
                 "writeChunk" -> writeChunk(call, result)
+                "setStereoVolume" -> setStereoVolume(call, result)
                 else -> result.notImplemented()
             }
         } catch (e: Exception) {
@@ -324,6 +329,7 @@ public class SoundStreamPlugin : FlutterPlugin,
                 .build()
         mAudioTrack = AudioTrack(audioAttributes, mPlayerFormat, mPlayerBufferSize, AudioTrack.MODE_STREAM, mPlayerSessionId)
         result.success(true)
+        debugLog("mAudioTrack audioSessionId: "+ mAudioTrack!!.audioSessionId)
         sendPlayerStatus(SoundStreamStatus.Initialized)
     }
 
@@ -402,4 +408,17 @@ public class SoundStreamPlugin : FlutterPlugin,
             }
         }
     }
+
+    private fun setStereoVolume(@NonNull call: MethodCall, @NonNull result: Result) {
+        mPlayerLeftGain = call.argument<Double>("leftGain") ?: mPlayerLeftGain
+        mPlayerRightGain = call.argument<Double>("rightGain") ?: mPlayerRightGain
+        debugLog("starting setStereoVolume, leftGain: " + mPlayerLeftGain + ", rightGain: " + mPlayerRightGain)
+        try {
+            mAudioTrack?.setStereoVolume(mPlayerLeftGain.toFloat(), mPlayerRightGain.toFloat())
+            result.success(true)
+        } catch (e: Exception) {
+            result.error(SoundStreamErrors.FailedToSetStereoVolume.name, "Failed to set stereo volume", e.localizedMessage)
+        }
+    }
+
 }
