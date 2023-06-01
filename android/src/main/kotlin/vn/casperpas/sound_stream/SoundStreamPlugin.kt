@@ -75,6 +75,7 @@ public class SoundStreamPlugin : FlutterPlugin,
             .setSampleRate(mPlayerSampleRate)
             .build()
 
+    private var mPlayerSessionId = AudioManager.AUDIO_SESSION_ID_GENERATE
     /** ======== Basic Plugin initialization ======== **/
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -179,8 +180,8 @@ public class SoundStreamPlugin : FlutterPlugin,
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>?,
-                                            grantResults: IntArray?): Boolean {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>,
+                                            grantResults: IntArray): Boolean {
         when (requestCode) {
             audioRecordPermissionCode -> {
                 if (grantResults != null) {
@@ -308,6 +309,9 @@ public class SoundStreamPlugin : FlutterPlugin,
 
         mPlayerBufferSize = AudioTrack.getMinBufferSize(mPlayerSampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
 
+        mPlayerSessionId = call.argument<Int>("sessionId") ?: mPlayerSessionId
+        debugLog("sessionId: "+mPlayerSessionId)
+
         if (mAudioTrack?.state == AudioTrack.STATE_INITIALIZED) {
             mAudioTrack?.release()
         }
@@ -316,8 +320,9 @@ public class SoundStreamPlugin : FlutterPlugin,
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                 .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
+                .setLegacyStreamType(AudioManager.STREAM_MUSIC) //this prabably overrides "setContentType" and "setUsage"
                 .build()
-        mAudioTrack = AudioTrack(audioAttributes, mPlayerFormat, mPlayerBufferSize, AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE)
+        mAudioTrack = AudioTrack(audioAttributes, mPlayerFormat, mPlayerBufferSize, AudioTrack.MODE_STREAM, mPlayerSessionId)
         result.success(true)
         sendPlayerStatus(SoundStreamStatus.Initialized)
     }
