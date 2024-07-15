@@ -1,6 +1,7 @@
 package vn.casperpas.sound_stream
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
@@ -44,9 +45,9 @@ enum class SoundStreamStatus {
 
 /** SoundStreamPlugin */
 public class SoundStreamPlugin : FlutterPlugin,
-        MethodCallHandler,
-        PluginRegistry.RequestPermissionsResultListener,
-        ActivityAware {
+    MethodCallHandler,
+    PluginRegistry.RequestPermissionsResultListener,
+    ActivityAware {
     private val logTag = "SoundStreamPlugin"
     private val audioRecordPermissionCode = 14887
 
@@ -68,13 +69,14 @@ public class SoundStreamPlugin : FlutterPlugin,
 
     //========= Player's vars
     private var mAudioTrack: AudioTrack? = null
+    private var mAudioManager: AudioManager? = null
     private var mPlayerSampleRate = 16000 // 16Khz
     private var mPlayerBufferSize = 10240
     private var mPlayerFormat: AudioFormat = AudioFormat.Builder()
-            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-            .setSampleRate(mPlayerSampleRate)
-            .build()
+        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+        .setSampleRate(mPlayerSampleRate)
+        .build()
 
     private var mPlayerSessionId = AudioManager.AUDIO_SESSION_ID_GENERATE
     private var mPlayerLeftGain = 1.0
@@ -82,8 +84,11 @@ public class SoundStreamPlugin : FlutterPlugin,
 
     /** ======== Basic Plugin initialization ======== **/
 
-    override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-        onAttachedToEngine(flutterPluginBinding.applicationContext, flutterPluginBinding.binaryMessenger)
+    override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+        onAttachedToEngine(
+            flutterPluginBinding.applicationContext,
+            flutterPluginBinding.binaryMessenger
+        )
     }
 
     // This static function is optional and equivalent to onAttachedToEngine. It supports the old
@@ -105,11 +110,12 @@ public class SoundStreamPlugin : FlutterPlugin,
         }
     }
 
-    override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
+    override fun onMethodCall(call: MethodCall, result: Result) {
         try {
             when (call.method) {
                 "hasPermission" -> hasPermission(result)
                 "initializeRecorder" -> initializeRecorder(call, result)
+                "usePhoneSpeaker" -> usePhoneSpeaker(call, result)
                 "startRecording" -> startRecording(result)
                 "stopRecording" -> stopRecording(result)
                 "initializePlayer" -> initializePlayer(call, result)
@@ -121,8 +127,10 @@ public class SoundStreamPlugin : FlutterPlugin,
             }
         } catch (e: Exception) {
             Log.e(logTag, "Unexpected exception", e)
-            result.error(SoundStreamErrors.Unknown.name,
-                    "Unexpected exception", e.localizedMessage)
+            result.error(
+                SoundStreamErrors.Unknown.name,
+                "Unexpected exception", e.localizedMessage
+            )
         }
     }
 
@@ -132,14 +140,20 @@ public class SoundStreamPlugin : FlutterPlugin,
         methodChannel.setMethodCallHandler(this)
     }
 
-    override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
-        methodChannel.setMethodCallHandler(null)
-        mListener?.onMarkerReached(null)
-        mListener?.onPeriodicNotification(null)
-        mListener = null
-        mRecorder?.stop()
-        mRecorder?.release()
-        mRecorder = null
+    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        try {
+            methodChannel.setMethodCallHandler(null)
+            mListener?.onMarkerReached(null)
+            mListener?.onPeriodicNotification(null)
+            mListener = null
+            mRecorder?.let {
+                it.stop()
+                it.release()
+            }
+            mRecorder = null
+        } catch (e: Exception) {
+            debugLog("onDetachedFromEngine error: ${e.localizedMessage}")
+        }
     }
 
     override fun onDetachedFromActivity() {
@@ -160,14 +174,21 @@ public class SoundStreamPlugin : FlutterPlugin,
 //        currentActivity = null
     }
 
+    private fun initAudioManager() {
+        if (mAudioManager != null) return
+        mAudioManager = currentActivity?.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+
     /** ======== Plugin methods ======== **/
 
     private fun hasRecordPermission(): Boolean {
         if (permissionToRecordAudio) return true
 
         val localContext = pluginContext
-        permissionToRecordAudio = localContext != null && ContextCompat.checkSelfPermission(localContext,
-                Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        permissionToRecordAudio = localContext != null && ContextCompat.checkSelfPermission(
+            localContext,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
         return permissionToRecordAudio
 
     }
@@ -180,19 +201,21 @@ public class SoundStreamPlugin : FlutterPlugin,
         val localActivity = currentActivity
         if (!hasRecordPermission() && localActivity != null) {
             debugLog("requesting RECORD_AUDIO permission")
-            ActivityCompat.requestPermissions(localActivity,
-                    arrayOf(Manifest.permission.RECORD_AUDIO), audioRecordPermissionCode)
+            ActivityCompat.requestPermissions(
+                localActivity,
+                arrayOf(Manifest.permission.RECORD_AUDIO), audioRecordPermissionCode
+            )
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>,
-                                            grantResults: IntArray): Boolean {
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>,
+        grantResults: IntArray
+    ): Boolean {
         when (requestCode) {
             audioRecordPermissionCode -> {
-                if (grantResults != null) {
-                    permissionToRecordAudio = grantResults.isNotEmpty() &&
-                            grantResults[0] == PackageManager.PERMISSION_GRANTED
-                }
+                permissionToRecordAudio = grantResults.isNotEmpty() &&
+                        grantResults[0] == PackageManager.PERMISSION_GRANTED
                 completeInitializeRecorder()
                 return true
             }
@@ -200,10 +223,15 @@ public class SoundStreamPlugin : FlutterPlugin,
         return false
     }
 
-    private fun initializeRecorder(@NonNull call: MethodCall, @NonNull result: Result) {
+    private fun initializeRecorder(call: MethodCall, result: Result) {
+        initAudioManager()
         mRecordSampleRate = call.argument<Int>("sampleRate") ?: mRecordSampleRate
         debugLogging = call.argument<Boolean>("showLogs") ?: false
-        mPeriodFrames = AudioRecord.getMinBufferSize(mRecordSampleRate, AudioFormat.CHANNEL_IN_MONO, mRecordFormat)
+        mPeriodFrames = AudioRecord.getMinBufferSize(
+            mRecordSampleRate,
+            AudioFormat.CHANNEL_IN_MONO,
+            mRecordFormat
+        )
         mRecorderBufferSize = mPeriodFrames * 2
         audioData = ShortArray(mPeriodFrames)
         activeResult = result
@@ -213,8 +241,10 @@ public class SoundStreamPlugin : FlutterPlugin,
             completeInitializeRecorder()
             return
         }
-        permissionToRecordAudio = ContextCompat.checkSelfPermission(localContext,
-                Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        permissionToRecordAudio = ContextCompat.checkSelfPermission(
+            localContext,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
         if (!permissionToRecordAudio) {
             requestRecordPermission()
         } else {
@@ -224,16 +254,22 @@ public class SoundStreamPlugin : FlutterPlugin,
         debugLog("leaving initializeIfPermitted")
     }
 
+    @SuppressLint("MissingPermission")
     private fun initRecorder() {
         if (mRecorder?.state == AudioRecord.STATE_INITIALIZED) {
             return
         }
-        mRecorder = AudioRecord(MediaRecorder.AudioSource.MIC, mRecordSampleRate, AudioFormat.CHANNEL_IN_MONO, mRecordFormat, mRecorderBufferSize)
-        if (mRecorder != null) {
-            mListener = createRecordListener()
-            mRecorder?.positionNotificationPeriod = mPeriodFrames
-            mRecorder?.setRecordPositionUpdateListener(mListener)
-        }
+
+        mRecorder = AudioRecord(
+            MediaRecorder.AudioSource.MIC,
+            mRecordSampleRate,
+            AudioFormat.CHANNEL_IN_MONO,
+            mRecordFormat,
+            mRecorderBufferSize
+        )
+        mListener = createRecordListener()
+        mRecorder?.positionNotificationPeriod = mPeriodFrames
+        mRecorder?.setRecordPositionUpdateListener(mListener)
     }
 
     private fun completeInitializeRecorder() {
@@ -280,7 +316,11 @@ public class SoundStreamPlugin : FlutterPlugin,
             result.success(true)
         } catch (e: IllegalStateException) {
             debugLog("record() failed")
-            result.error(SoundStreamErrors.FailedToRecord.name, "Failed to start recording", e.localizedMessage)
+            result.error(
+                SoundStreamErrors.FailedToRecord.name,
+                "Failed to start recording",
+                e.localizedMessage
+            )
         }
     }
 
@@ -295,7 +335,11 @@ public class SoundStreamPlugin : FlutterPlugin,
             result.success(true)
         } catch (e: IllegalStateException) {
             debugLog("record() failed")
-            result.error(SoundStreamErrors.FailedToRecord.name, "Failed to start recording", e.localizedMessage)
+            result.error(
+                SoundStreamErrors.FailedToRecord.name,
+                "Failed to start recording",
+                e.localizedMessage
+            )
         }
     }
 
@@ -303,16 +347,21 @@ public class SoundStreamPlugin : FlutterPlugin,
         sendEventMethod("recorderStatus", status.name)
     }
 
-    private fun initializePlayer(@NonNull call: MethodCall, @NonNull result: Result) {
+    private fun initializePlayer(call: MethodCall, result: Result) {
+        initAudioManager()
         mPlayerSampleRate = call.argument<Int>("sampleRate") ?: mPlayerSampleRate
         debugLogging = call.argument<Boolean>("showLogs") ?: false
         mPlayerFormat = AudioFormat.Builder()
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                .setSampleRate(mPlayerSampleRate)
-                .build()
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+            .setSampleRate(mPlayerSampleRate)
+            .build()
 
-        mPlayerBufferSize = AudioTrack.getMinBufferSize(mPlayerSampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        mPlayerBufferSize = AudioTrack.getMinBufferSize(
+            mPlayerSampleRate,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        )
 
         mPlayerSessionId = call.argument<Int>("sessionId") ?: mPlayerSessionId
         debugLog("sessionId: "+mPlayerSessionId)
@@ -322,23 +371,37 @@ public class SoundStreamPlugin : FlutterPlugin,
         }
 
         val audioAttributes = AudioAttributes.Builder()
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
-                .setLegacyStreamType(AudioManager.STREAM_MUSIC) //this prabably overrides "setContentType" and "setUsage"
-                .build()
-        mAudioTrack = AudioTrack(audioAttributes, mPlayerFormat, mPlayerBufferSize, AudioTrack.MODE_STREAM, mPlayerSessionId)
+            .setLegacyStreamType(AudioManager.STREAM_MUSIC)
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
+            .build()
+
+        mAudioTrack = AudioTrack(
+            audioAttributes,
+            mPlayerFormat,
+            mPlayerBufferSize,
+            AudioTrack.MODE_STREAM,
+            AudioManager.AUDIO_SESSION_ID_GENERATE
+        )
+
+        mAudioManager?.mode = AudioManager.MODE_NORMAL
+
         result.success(true)
         debugLog("mAudioTrack audioSessionId: "+ mAudioTrack!!.audioSessionId)
         sendPlayerStatus(SoundStreamStatus.Initialized)
     }
 
-    private fun writeChunk(@NonNull call: MethodCall, @NonNull result: Result) {
+    private fun writeChunk(call: MethodCall, result: Result) {
         val data = call.argument<ByteArray>("data")
         if (data != null) {
             pushPlayerChunk(data, result)
         } else {
-            result.error(SoundStreamErrors.FailedToWriteBuffer.name, "Failed to write Player buffer", "'data' is null")
+            result.error(
+                SoundStreamErrors.FailedToWriteBuffer.name,
+                "Failed to write Player buffer",
+                "'data' is null"
+            )
         }
     }
 
@@ -352,8 +415,18 @@ public class SoundStreamPlugin : FlutterPlugin,
             mAudioTrack?.write(shortChunk, 0, shortChunk.size)
             result.success(true)
         } catch (e: Exception) {
-            result.error(SoundStreamErrors.FailedToWriteBuffer.name, "Failed to write Player buffer", e.localizedMessage)
+            result.error(
+                SoundStreamErrors.FailedToWriteBuffer.name,
+                "Failed to write Player buffer",
+                e.localizedMessage
+            )
         }
+    }
+
+    private fun usePhoneSpeaker(call: MethodCall, result: Result) {
+        val useSpeaker = call.argument<Boolean>("value") ?: false
+        mAudioManager?.mode = if (useSpeaker) AudioManager.MODE_IN_COMMUNICATION else AudioManager.MODE_NORMAL
+        result.success(true)
     }
 
     private fun startPlayer(result: Result) {
@@ -367,7 +440,11 @@ public class SoundStreamPlugin : FlutterPlugin,
             sendPlayerStatus(SoundStreamStatus.Playing)
             result.success(true)
         } catch (e: Exception) {
-            result.error(SoundStreamErrors.FailedToPlay.name, "Failed to start Player", e.localizedMessage)
+            result.error(
+                SoundStreamErrors.FailedToPlay.name,
+                "Failed to start Player",
+                e.localizedMessage
+            )
         }
     }
 
@@ -379,7 +456,11 @@ public class SoundStreamPlugin : FlutterPlugin,
             sendPlayerStatus(SoundStreamStatus.Stopped)
             result.success(true)
         } catch (e: Exception) {
-            result.error(SoundStreamErrors.FailedToStop.name, "Failed to stop Player", e.localizedMessage)
+            result.error(
+                SoundStreamErrors.FailedToStop.name,
+                "Failed to stop Player",
+                e.localizedMessage
+            )
         }
     }
 
@@ -387,7 +468,7 @@ public class SoundStreamPlugin : FlutterPlugin,
         sendEventMethod("playerStatus", status.name)
     }
 
-    private fun createRecordListener(): OnRecordPositionUpdateListener? {
+    private fun createRecordListener(): OnRecordPositionUpdateListener {
         return object : OnRecordPositionUpdateListener {
             override fun onMarkerReached(recorder: AudioRecord) {
                 recorder.read(audioData!!, 0, mRecorderBufferSize)
@@ -396,9 +477,11 @@ public class SoundStreamPlugin : FlutterPlugin,
             override fun onPeriodicNotification(recorder: AudioRecord) {
                 val data = audioData!!
                 val shortOut = recorder.read(data, 0, mPeriodFrames)
-                // this condistion to prevent app crash from happening in Android Devices
+                // this condition to prevent app crash from happening in Android Devices
                 // See issues: https://github.com/CasperPas/flutter-sound-stream/issues/25
-                if (shortOut < 1) { return }
+                if (shortOut < 1) {
+                    return
+                }
                 // https://flutter.io/platform-channels/#codec
                 // convert short to int because of platform-channel's limitation
                 val byteBuffer = ByteBuffer.allocate(shortOut * 2)

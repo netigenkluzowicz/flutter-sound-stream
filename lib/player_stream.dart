@@ -50,6 +50,9 @@ class PlayerStream {
         "leftGain": leftGain,
         "rightGain": rightGain,
       });
+  /// Switching/Forcing player to use phone's speaker.
+  Future<dynamic> usePhoneSpeaker(bool value) => _methodChannel
+      .invokeMethod("usePhoneSpeaker", <String, dynamic>{"value": value});
 
   /// Current status of the [PlayerStream]
   Stream<SoundStreamStatus> get status => _playerStatusController.stream;
