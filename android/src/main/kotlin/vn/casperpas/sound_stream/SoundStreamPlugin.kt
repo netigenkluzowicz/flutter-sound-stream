@@ -382,7 +382,7 @@ public class SoundStreamPlugin : FlutterPlugin,
             mPlayerFormat,
             mPlayerBufferSize,
             AudioTrack.MODE_STREAM,
-            AudioManager.AUDIO_SESSION_ID_GENERATE
+            mPlayerSessionId
         )
 
         mAudioManager?.mode = AudioManager.MODE_NORMAL
