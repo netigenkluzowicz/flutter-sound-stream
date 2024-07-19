@@ -7,6 +7,7 @@ public enum SoundStreamErrors: String {
     case FailedToPlay
     case FailedToStop
     case FailedToWriteBuffer
+    case FailedToSetStereoVolume
     case Unknown
 }
 
@@ -35,6 +36,8 @@ public class SwiftSoundStreamPlugin: NSObject, FlutterPlugin {
     private var mPlayerBufferSize: AVAudioFrameCount = 8192
     private var mPlayerOutputFormat: AVAudioFormat!
     private var mPlayerInputFormat: AVAudioFormat!
+    private var mPlayerLeftGain: Float = 1.000
+    private var mPlayerRightGain: Float = 1.000
 
     /** ======== Basic Plugin initialization ======== **/
 
@@ -63,6 +66,8 @@ public class SwiftSoundStreamPlugin: NSObject, FlutterPlugin {
             stopPlayer(result)
         case "writeChunk":
             writeChunk(call, result)
+        case "setStereoVolume":
+            setStereoVolume(call, result)
         default:
             print("Unrecognized method: \(call.method)")
             sendResult(result, FlutterMethodNotImplemented)
@@ -251,4 +256,29 @@ public class SwiftSoundStreamPlugin: NSObject, FlutterPlugin {
         return audioBuffer
     }
 
+    private func setStereoVolume(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+        guard let argsArr = call.arguments as? Dictionary<String,NSNumber>
+        else {
+            sendResult(result, FlutterError( code: SoundStreamErrors.Unknown.rawValue,
+                                             message:"Incorrect parameters",
+                                             details: nil ))
+            return
+        }
+
+        mPlayerLeftGain = argsArr["leftGain"]?.floatValue ?? mPlayerLeftGain
+        mPlayerRightGain = argsArr["rightGain"]?.floatValue ?? mPlayerRightGain
+        var newPan: Float = mPlayerRightGain < 1 ? mPlayerRightGain - 1.000 : 1.000 - mPlayerLeftGain
+        if debugLogging {
+            print("starting setStereoVolume, leftGain: \(mPlayerLeftGain), rightGain: \(mPlayerRightGain), newPan: \(newPan)")
+        }
+
+        do {
+            mPlayerNode.pan = newPan
+            result(true)
+        } catch {
+            result(FlutterError(code: SoundStreamErrors.FailedToSetStereoVolume.rawValue, 
+                                message: "Failed to set stereo volume", 
+                                details: nil))
+        }
+    }
 }
