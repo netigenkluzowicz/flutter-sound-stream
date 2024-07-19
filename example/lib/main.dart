@@ -14,15 +14,12 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  RecorderStream _recorder = RecorderStream();
   PlayerStream _player = PlayerStream();
 
   List<Uint8List> _micChunks = [];
-  bool _isRecording = false;
   bool _isPlaying = false;
   bool _useSpeaker = false;
 
-  StreamSubscription? _recorderStatus;
   StreamSubscription? _playerStatus;
   StreamSubscription? _audioStream;
 
@@ -34,7 +31,6 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
-    _recorderStatus?.cancel();
     _playerStatus?.cancel();
     _audioStream?.cancel();
     super.dispose();
@@ -42,21 +38,6 @@ class _MyAppState extends State<MyApp> {
 
   // Platform messages are asynchronous, so we initialize in an async method.
   Future<void> initPlugin() async {
-    _recorderStatus = _recorder.status.listen((status) {
-      if (mounted)
-        setState(() {
-          _isRecording = status == SoundStreamStatus.Playing;
-        });
-    });
-
-    _audioStream = _recorder.audioStream.listen((data) {
-      if (_isPlaying) {
-        _player.writeChunk(data);
-      } else {
-        _micChunks.add(data);
-      }
-    });
-
     _playerStatus = _player.status.listen((status) {
       if (mounted)
         setState(() {
@@ -65,7 +46,6 @@ class _MyAppState extends State<MyApp> {
     });
 
     await Future.wait([
-      _recorder.initialize(),
       _player.initialize(),
     ]);
   }
@@ -94,11 +74,6 @@ class _MyAppState extends State<MyApp> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                IconButton(
-                  iconSize: 96.0,
-                  icon: Icon(_isRecording ? Icons.mic_off : Icons.mic),
-                  onPressed: _isRecording ? _recorder.stop : _recorder.start,
-                ),
                 IconButton(
                   iconSize: 96.0,
                   icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),

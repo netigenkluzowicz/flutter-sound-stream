@@ -17,13 +17,10 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  RecorderStream _recorder = RecorderStream();
   PlayerStream _player = PlayerStream();
 
-  bool _isRecording = false;
   bool _isPlaying = false;
 
-  StreamSubscription? _recorderStatus;
   StreamSubscription? _playerStatus;
   StreamSubscription? _audioStream;
 
@@ -37,7 +34,6 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
-    _recorderStatus?.cancel();
     _playerStatus?.cancel();
     _audioStream?.cancel();
     super.dispose();
@@ -50,17 +46,6 @@ class _MyAppState extends State<MyApp> {
       if (_isPlaying) _player.writeChunk(event);
     });
 
-    _audioStream = _recorder.audioStream.listen((data) {
-      channel.sink.add(data);
-    });
-
-    _recorderStatus = _recorder.status.listen((status) {
-      if (mounted)
-        setState(() {
-          _isRecording = status == SoundStreamStatus.Playing;
-        });
-    });
-
     _playerStatus = _player.status.listen((status) {
       if (mounted)
         setState(() {
@@ -69,25 +54,16 @@ class _MyAppState extends State<MyApp> {
     });
 
     await Future.wait([
-      _recorder.initialize(),
       _player.initialize(),
     ]);
   }
 
   void _startRecord() async {
     await _player.stop();
-    await _recorder.start();
-    setState(() {
-      _isRecording = true;
-    });
   }
 
   void _stopRecord() async {
-    await _recorder.stop();
     await _player.start();
-    setState(() {
-      _isRecording = false;
-    });
   }
 
   @override
@@ -111,10 +87,6 @@ class _MyAppState extends State<MyApp> {
               onTapCancel: () {
                 _stopRecord();
               },
-              child: Icon(
-                _isRecording ? Icons.mic_off : Icons.mic,
-                size: 128,
-              ),
             ),
           ],
         ),
