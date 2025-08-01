@@ -115,6 +115,7 @@ public class SwiftSoundStreamPlugin: NSObject, FlutterPlugin {
         debugLogging = argsArr["showLogs"] as? Bool ?? debugLogging
         mPlayerInputFormat = AVAudioFormat(commonFormat: AVAudioCommonFormat.pcmFormatInt16, sampleRate: mPlayerSampleRate, channels: 1, interleaved: true)
         sendPlayerStatus(SoundStreamStatus.Initialized)
+        result(true)
     }
 
     private func attachPlayer() {
